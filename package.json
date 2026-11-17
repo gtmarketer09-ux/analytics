@@ -6,21 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "tunnel": "tsx --env-file=.env scripts/tunnel.ts",
+    "dev:tunnel": "tsx --env-file=.env scripts/start-with-tunnel.ts",
+    "cron:local": "tsx scripts/local-cron.ts",
     "lint": "eslint"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^9.5.0",
+    "@google-cloud/storage": "^8.4.0",
+    "@ngrok/ngrok": "^1.8.0",
+    "csv-parse": "^7.0.3",
+    "fflate": "^0.8.3",
+    "googleapis": "^189.0.0",
+    "mysql2": "^3.24.6",
     "next": "16.4.3",
+    "node-cron": "^4.2.1",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "recharts": "^3.10.1",
+    "reflect-metadata": "^0.2.2",
+    "server-only": "^0.0.1",
+    "typeorm": "^1.1.2"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
-    "@types/node": "^20",
+    "@types/node": "^20.19.43",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   }
 }

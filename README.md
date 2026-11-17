@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AdMob Analytics Dashboard
 
-## Getting Started
+Next.js dashboard for daily AdMob metrics stored in MySQL.
 
-First, run the development server:
+## Requirements
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js 20 or later
+- MySQL 8.0+
+- AdMob OAuth client credentials and a publisher ID
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Setup
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Install dependencies with `npm install`.
+2. Copy `.env.example` to `.env` and fill in the database and AdMob credentials.
+3. Start the dashboard with `npm run dev` and open [http://localhost:3000](http://localhost:3000).
+4. Run `npm run lint` and `npm run build` to check the project.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The dashboard displays an empty state until reports have been synchronized. Dashboard pages and charts read only from MySQL; they never call the AdMob API.
 
-## Learn More
+## Daily data refresh
 
-To learn more about Next.js, take a look at the following resources:
+Run `npm run cron:local` on a machine that stays online to schedule the daily data pipeline at 11:00 AM Asia/Karachi. The scheduler starts the local Next.js development server if one is not already reachable at `LOCAL_APP_URL` (defaults to `http://localhost:3000`), then refreshes currency rates, AdMob, Play Console, Google Ads, Firebase, and the daily analytics aggregate for yesterday. Keep the scheduler process running; stop it with Ctrl+C.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+When targeting a production deployment, set `LOCAL_APP_URL` to its base URL and provide `CRON_SECRET`. For a production deployment, keep this scheduler running on an always-on host.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The dashboard displays an empty state until reports have been synchronized. The sync endpoint is `GET /api/cron/admob`; in production it requires an `Authorization: Bearer <CRON_SECRET>` header. Each sync updates the report for that date, so retries are safe.

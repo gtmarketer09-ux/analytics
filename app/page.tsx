@@ -1,68 +1,222 @@
-import Image from "next/image";
+import { Suspense } from 'react';
+import { connection } from 'next/server';
+import { Sidebar } from '@/app/components/navigation/Sidebar';
+import { DateRangeForm } from '@/app/components/dashboard/DateRangeFrom';
+import { PortfolioKpiCards } from '@/app/components/portfolio/PortfolioKpiCards';
+import { PortfolioDailyTable } from '@/app/components/portfolio/PortfolioDailyTable';
+import { PortfolioLatestCards } from '@/app/components/portfolio/PortfolioLatestCards';
+import { PortfolioCharts } from '@/app/components/portfolio/PortfolioCharts';
+import { AdmobKpiCards } from '@/app/components/admob/AdmobKpiCards';
+import { AdmobChartsExpanded } from '@/app/components/admob/AdmobChartsExpanded';
+import { AdmobFullTable } from '@/app/components/admob/AdmobFullTable';
+import { GoogleAdsKpiCards } from '@/app/components/googleads/GoogleAdsKpiCards';
+import { GoogleAdsChartsExpanded } from '@/app/components/googleads/GoogleAdsChartsExpanded';
+import { GoogleAdsFullTable } from '@/app/components/googleads/GoogleAdsFullTable';
+import { PlayConsoleKpiCards } from '@/app/components/playconsole/PlayConsoleKpiCards';
+import { PlayConsoleChartsExpanded } from '@/app/components/playconsole/PlayConsoleChartsExpanded';
+import { PlayConsoleFullTable } from '@/app/components/playconsole/PlayConsoleFullTable';
+import { settings } from '@/app/server/config/env';
+import { addDays, isDate, yesterday } from '@/app/server/lib/dates';
+import { getAdmobAvailableRange, getAdmobReport } from '@/app/server/repositories/admob.repository';
+import { getGoogleAdsAvailableRange, getGoogleAdsReport } from '@/app/server/repositories/googleAds.repository';
+import { getPlayConsoleAvailableRange, getPlayConsoleReport } from '@/app/server/repositories/playConsole.repository';
+import {
+  getDailyAnalyticsAvailableRange,
+  getPortfolioReport,
+  MIN_ANALYTICS_DATE,
+} from '@/app/server/repositories/dailyAnalytics.repository';
 
-export default function Home() {
+type Props = {
+  searchParams: Promise<{ start?: string; end?: string; view?: string }>;
+};
+
+export default function DashboardPage({ searchParams }: Props) {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+    <Suspense fallback={<main className="loading-state"><p className="muted">Loading dashboard...</p></main>}>
+      <DashboardContent searchParams={searchParams} />
+    </Suspense>
+  );
+}
+
+async function DashboardContent({ searchParams }: Props) {
+  await connection();
+  const sp = await searchParams;
+  const activeView = sp.view === 'admob'
+    ? 'admob'
+    : sp.view === 'ads'
+      ? 'ads'
+      : sp.view === 'play-console'
+        ? 'play-console'
+        : 'portfolio';
+
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: settings.timeZone })
+    .format(new Date())
+    .replace(/\//g, '-');
+  const latest = yesterday(settings.timeZone);
+  const admobAvailable = await getAdmobAvailableRange();
+  const googleAdsAvailable = await getGoogleAdsAvailableRange();
+  const playConsoleAvailable = await getPlayConsoleAvailableRange();
+  const analyticsAvailable = await getDailyAnalyticsAvailableRange();
+
+  const timelineCandidates = [admobAvailable, googleAdsAvailable, playConsoleAvailable, analyticsAvailable].filter(
+    (range): range is { start: string; end: string } => Boolean(range),
+  );
+
+  const timelineStart = timelineCandidates.length
+    ? timelineCandidates.map((range) => range.start).sort()[0]
+    : MIN_ANALYTICS_DATE;
+  const rawTimelineEnd = timelineCandidates.length
+    ? timelineCandidates.map((range) => range.end).sort().at(-1) ?? latest
+    : latest;
+
+  const maxSelectableDate = [today, rawTimelineEnd].filter(Boolean).sort().at(-1) ?? today;
+
+  const effectiveEarliest = activeView === 'portfolio' ? MIN_ANALYTICS_DATE : timelineStart;
+  const requestedEnd = isDate(sp.end) ? sp.end : maxSelectableDate;
+  const end = requestedEnd < effectiveEarliest
+    ? effectiveEarliest
+    : requestedEnd > maxSelectableDate
+      ? maxSelectableDate
+      : requestedEnd;
+
+  const defaultStart = activeView === 'portfolio'
+    ? MIN_ANALYTICS_DATE
+    : addDays(end, -29) < timelineStart
+      ? timelineStart
+      : addDays(end, -29);
+
+  const requestedStart = isDate(sp.start) ? sp.start : defaultStart;
+  const start = requestedStart < effectiveEarliest ? effectiveEarliest : requestedStart > end ? end : requestedStart;
+
+  let portfolioData: Awaited<ReturnType<typeof getPortfolioReport>> | null = null;
+  let admobReport: Awaited<ReturnType<typeof getAdmobReport>> | null = null;
+  let googleAdsReport: Awaited<ReturnType<typeof getGoogleAdsReport>> | null = null;
+  let playConsoleReport: Awaited<ReturnType<typeof getPlayConsoleReport>> | null = null;
+  let error: string | null = null;
+
+  try {
+    if (activeView === 'portfolio') {
+      portfolioData = await getPortfolioReport(start, end);
+    } else if (activeView === 'admob') {
+      admobReport = await getAdmobReport(start, end);
+    } else if (activeView === 'ads') {
+      googleAdsReport = await getGoogleAdsReport(start, end);
+    } else if (activeView === 'play-console') {
+      playConsoleReport = await getPlayConsoleReport(start, end);
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+
+  const lastUpdatedDate =
+    portfolioData?.lastUpdated ||
+    admobReport?.lastUpdated ||
+    googleAdsReport?.lastUpdated ||
+    playConsoleReport?.lastUpdated;
+  const lastUpdated = lastUpdatedDate
+    ? new Date(lastUpdatedDate).toLocaleString('en-GB', { timeZone: settings.timeZone })
+    : null;
+
+  const viewTitles: Record<string, { title: string; subtitle: string }> = {
+    portfolio: {
+      title: 'Portfolio Overview',
+      subtitle: 'Cross-platform total revenue, ad spendings, net profit, and projections',
+    },
+    admob: {
+      title: 'AdMob Analytics',
+      subtitle: 'Daily impressions, requests, CTR, eCPM, and earnings in USD',
+    },
+    ads: {
+      title: 'Google Ads Campaigns',
+      subtitle: 'Campaign acquisition spend, clicks, conversion performance, and ROAS',
+    },
+    'play-console': {
+      title: 'Google Play Console',
+      subtitle: 'In-app purchases, financial reports, store fees, and net revenue',
+    },
+  };
+
+  const currentMeta = viewTitles[activeView];
+
+  return (
+    <div className="dashboard-shell">
+      <Sidebar activeView={activeView} start={start} end={end} />
+
+      <main className="dashboard-main">
+        {/* Top Header */}
+        <div className="dashboard-header">
+          <div>
+            <h1>{currentMeta.title}</h1>
+            <span className="muted">{currentMeta.subtitle}</span>
+          </div>
+          <div className="header-actions">
+            <DateRangeForm
+              start={start}
+              end={end}
+              earliest={effectiveEarliest}
+              latest={maxSelectableDate}
+              view={activeView}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <button className="export-button" type="button">
+              Export Data
+            </button>
+          </div>
         </div>
+
+        {lastUpdated && <p className="last-updated">Last synchronized: {lastUpdated} (Asia/Karachi) · USD Base Currency</p>}
+
+        {error && <div className="error">Unable to load analytics data: {error}</div>}
+
+        {/* --- VIEW 1: PORTFOLIO --- */}
+        {activeView === 'portfolio' && portfolioData && (
+          <div className="portfolio-content">
+            {/* 1. Top 5 Boxes */}
+            <PortfolioKpiCards data={portfolioData} />
+
+            {/* 2. Daily Basis Table */}
+            <PortfolioDailyTable
+              days={portfolioData.days}
+              totalRevenue={portfolioData.totalRevenue}
+              totalAdSpend={portfolioData.totalAdSpendUsd}
+              totalProfit={portfolioData.totalProfit}
+              windowRoas={portfolioData.windowRoas}
+              averageEcpm={portfolioData.averageEcpm}
+            />
+
+            {/* 3. Bottom 5 Boxes (Latest Day + Window ROAS) */}
+            <PortfolioLatestCards data={portfolioData} />
+
+            {/* 4. Graph of Total Revenue USD and Ad Spending USD */}
+            <PortfolioCharts days={portfolioData.days} />
+          </div>
+        )}
+
+        {/* --- VIEW 2: ADMOB --- */}
+        {activeView === 'admob' && admobReport && (
+          <div className="admob-content">
+            <AdmobKpiCards total={admobReport.total} />
+            <AdmobChartsExpanded days={admobReport.days} />
+            <AdmobFullTable days={admobReport.days} total={admobReport.total} />
+          </div>
+        )}
+
+        {/* --- VIEW 3: GOOGLE ADS --- */}
+        {activeView === 'ads' && googleAdsReport && (
+          <div className="ads-content">
+            <GoogleAdsKpiCards report={googleAdsReport} />
+            <GoogleAdsChartsExpanded days={googleAdsReport.days} />
+            <GoogleAdsFullTable report={googleAdsReport} />
+          </div>
+        )}
+
+        {/* --- VIEW 4: PLAY CONSOLE --- */}
+        {activeView === 'play-console' && playConsoleReport && (
+          <div className="play-console-content">
+            <PlayConsoleKpiCards report={playConsoleReport} />
+            <PlayConsoleChartsExpanded days={playConsoleReport.days} />
+            <PlayConsoleFullTable report={playConsoleReport} />
+          </div>
+        )}
       </main>
     </div>
   );
